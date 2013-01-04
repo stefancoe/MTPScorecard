@@ -1,0 +1,385 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">  
+<html>  
+  <head>  
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"> 
+    <meta http-equiv="X-UA-Compatible" content="IE=7,IE=9" /> 
+    <!--The viewport meta tag is used to improve the presentation and behavior of the samples  
+      on iOS devices--> 
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no"/> 
+    <title>Updating the legend to display visible layers</title>  
+    <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.2/js/dojo/dijit/themes/claro/claro.css">  
+    <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.2/js/esri/css/esri.css" />  
+	<link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.2/js/dojo/dojox/grid/resources/Grid.css"> 
+    <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.2/js/dojo/dojox/grid/resources/claroGrid.css">
+	<link rel="stylesheet" type="text/css" href="css/layout.css"/> 
+
+ <style>  
+      html, body { height: 98%; width: 98%; margin: 0; padding: 5px; } 
+      #rightPane{ 
+        width:20%; 
+      } 
+      #legendPane{ 
+        border: solid #97DCF2 1px; 
+      } 
+      
+    </style>  
+    <script type="text/javascript">var djConfig = {parseOnLoad: true};</script>  
+    <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=3.2"></script>  
+    <script type="text/javascript">
+	dojo.require("dijit.dijit");
+      dojo.require("dijit.layout.BorderContainer"); 
+      dojo.require("dijit.layout.ContentPane"); 
+      dojo.require("dijit.layout.AccordionContainer"); 
+      dojo.require("esri.map"); 
+      dojo.require("esri.dijit.Legend"); 
+      dojo.require("esri.arcgis.utils"); 
+      dojo.require("dijit.form.CheckBox"); 
+	  dojo.require("dijit.form.Button"); 
+	  dojo.require("esri.tasks.find");
+      dojo.require("dojox.grid.DataGrid"); 
+      dojo.require("dojo.data.ItemFileReadStore"); 
+       var map, osmLayer, urlObject; 
+	   var findTask, findParams; 
+	   var legendLayers = [];
+	   var configOptions;
+	   var loading;
+  
+      function init() { 
+	  loading = dojo.byId("loadingImg");
+        var extent = new esri.geometry.Extent({"xmin":-13722926.808090655,"ymin":5894619.503700986,"xmax":-13428246.531230101,"ymax":6162179.934655183,"spatialReference":{"wkid":102100}}); 
+         map = new esri.Map("map",{extent:extent,logo:false}); 
+		 dojo.connect(map,"onUpdateStart",showLoading); 
+        dojo.connect(map,"onUpdateEnd",hideLoading); 
+		 
+		 configOptions = {
+			mtpid:""
+			}
+		urlObject = esri.urlToObject(document.location.href); 
+        urlObject.query = urlObject.query || {}; 
+        if(urlObject.query && urlObject.query.mtpid){ 
+			configOptions.mtpid = urlObject.query.mtpid; 
+          } 
+	dojo.byId("ownerName").value = configOptions.mtpid;
+         
+        //Add the terrain service to the map. View the ArcGIS Online site for services http://arcgisonline/home/search.html?t=content&f=typekeywords:service     
+        var osmLayer = new esri.layers.OpenStreetMapLayer({id: "myOSMLayer"}); 
+        map.addLayer(osmLayer); 
+		var details = ""; 
+			details = "loaded: " + osmLayer.loaded + "<br />"; 
+			details += "initialExtent: " + dojo.toJson(osmLayer.initialExtent.toJson()) + "<br />"; 
+			details += "fullExtent: " + dojo.toJson(osmLayer.fullExtent.toJson()) + "<br />"; 
+			details += "spatialReference: " + dojo.toJson(osmLayer.spatialReference.toJson())+ "<br />"; 
+		findTask = new esri.tasks.FindTask("http://webmap.psrc.org/arcgis/rest/services/MTP_projects/MapServer/"); 
+ 
+        //Create the find parameters 
+        findParams = new esri.tasks.FindParameters(); 
+        findParams.returnGeometry = true; 
+        findParams.layerIds = [0]; 
+        findParams.searchFields = ["intProjID"]; 
+        findParams.outSpatialReference = map.spatialReference; 
+		//Find and zoom to current project
+		findParams.searchText = urlObject.query.mtpid; 
+        findTask.execute(findParams,showResults); 
+		function showResults(results) { 
+        //This function works with an array of FindResult that the task returns 
+        map.graphics.clear(); 
+        var symbol = new esri.symbol.SimpleFillSymbol("none", new esri.symbol.SimpleLineSymbol("solid", new dojo.Color([255,0,0]), 3), new dojo.Color([255,255,0,0.25]));
+ 
+        //create array of attributes 
+        var items = dojo.map(results,function(result){ 
+          var graphic = result.feature; 
+          graphic.setSymbol(symbol); 
+          map.graphics.add(graphic); 
+          return result.feature.attributes; 
+        }); 
+	
+         
+       
+	var selectedTaxLot; 
+	var taxLotExtent;
+ 
+        dojo.forEach(map.graphics.graphics,function(graphic){ 
+          selectedTaxLot = graphic; 
+          return; 
+      
+        }); 
+
+	var taxLotExtent = selectedTaxLot.geometry.getExtent();
+	taxLotExtent = taxLotExtent.expand(1.3);
+        map.setExtent(taxLotExtent); 
+ 
+      } 
+	  
+	  //add layers
+
+	//Support for Centers
+	var c2bLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/C2b/MapServer"); 
+ 	legendLayers.push({layer:c2bLayer,title:"C2b"});
+
+	var c2aLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/C2a/MapServer"); 
+ 	legendLayers.push({layer:c2aLayer,title:"C2a"});
+
+	var c1a_b_cLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/F4a_b/MapServer"); 
+ 	legendLayers.push({layer:c1a_b_cLayer,title:"C1a/b/c"});
+
+	//Social Equity + Access to Opportunity
+	var o3cLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/O3c/MapServer"); 
+ 	legendLayers.push({layer:o3cLayer,title:"O3c"});
+
+	var o3bLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/O3b/MapServer"); 
+ 	legendLayers.push({layer:o3bLayer,title:"O3b"});
+
+	var o3aLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/O3a/MapServer"); 
+ 	legendLayers.push({layer:o3aLayer,title:"O3a"});
+
+	var o1_o2a_b_cLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/O1_O2a_b_c/MapServer"); 
+ 	legendLayers.push({layer:o1_o2a_b_cLayer,title:"O1_O2a/b/c"});	
+
+	 
+
+	//Safety and Security will go here
+
+	//PUget Sound Land + Water
+	var w2_3Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/W2_3/MapServer"); 
+ 	legendLayers.push({layer:w2_3Layer,title:"W2/3"}); 
+
+	var W1a_b_c_dLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/W1a_b_c_D/MapServer"); 
+ 	legendLayers.push({layer:W1a_b_c_dLayer,title:"W1a/b/c/d"}); 
+
+	//Multi-Modal
+	var m7Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/M7/MapServer"); 
+ 	legendLayers.push({layer:m7Layer,title:"M7"}); 
+  	
+	var m4Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/M4/MapServer"); 
+ 	legendLayers.push({layer:m4Layer,title:"M4"}); 
+
+	//Jobs
+	var j4Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/J4/MapServer"); 
+ 	legendLayers.push({layer:j4Layer,title:"J4"}); 	
+
+	var j3Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/J3/MapServer"); 
+ 	legendLayers.push({layer:j3Layer,title:"J3"}); 
+
+	var j2Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/J2/MapServer"); 
+ 	legendLayers.push({layer:j2Layer,title:"J2"}); 
+	
+	var j1bLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/J1b/MapServer"); 
+ 	legendLayers.push({layer:j1bLayer,title:"J1b"}); 
+		
+	var j1aLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/J1a/MapServer"); 
+ 	legendLayers.push({layer:j1aLayer,title:"J1a"}); 	
+		
+	//Freight	
+	var f6Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/F6/MapServer"); 
+ 	legendLayers.push({layer:f6Layer,title:"F6"}); 
+	
+	
+		
+	var f5Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/F5/MapServer"); 
+	legendLayers.push({layer:f5Layer,title:"F5"});
+		
+	var f4a_bLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/F4a_b/MapServer"); 
+	legendLayers.push({layer:f4a_bLayer,title:"F4a/b"}); 
+
+
+	var f1Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/F1/MapServer"); 
+
+	legendLayers.push({layer:f1Layer,title:"F1"});	
+	
+
+		
+	//Air Quality	
+	var schoolLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/Schools/MapServer"); 
+	legendLayers.push({layer:schoolLayer,title:"A3"});	
+
+	var t1t2Layer = new esri.layers.ArcGISDynamicMapServiceLayer("http://webmap.psrc.org/arcgis/rest/services/A2aFreight1/MapServer",{id:'A2aFreight'});
+	legendLayers.push({layer:t1t2Layer,title:"A2a"}); 
+		
+       
+		
+        dojo.connect(map,'onLayersAddResult',function(results){ 
+          var legend = new esri.dijit.Legend({ 
+            map:map, 
+            layerInfos:legendLayers 
+          },"legendDiv"); 
+          legend.startup(); 
+        }); 
+		
+        map.addLayers([c2bLayer, c2aLayer, c1a_b_cLayer, o3cLayer, o3bLayer, o3aLayer, o1_o2a_b_cLayer, w2_3Layer, W1a_b_c_dLayer, m7Layer, m4Layer, j4Layer, j3Layer, j2Layer, j1bLayer, j1aLayer,f4a_bLayer,f6Layer, f5Layer, schoolLayer, f1Layer, t1t2Layer]);
+		
+	
+		//hide each layer
+		dojo.forEach(map.layerIds,function(id){
+			if(id != "myOSMLayer"){ 		
+			var layer = map.getLayer(id);
+			layer.hide();
+			}
+          }); 
+		
+		
+
+		
+       
+ 
+         
+        //add check boxes  
+        dojo.forEach(legendLayers,function(layer){          
+         var layerName = layer.title; 
+         var checkBox = new dijit.form.CheckBox({ 
+            name: "checkBox" + layer.layer.id, 
+            value: layer.layer.id, 
+            checked: false, 
+            onChange: function(evt) { 
+              var clayer = map.getLayer(this.value); 
+              clayer.setVisibility(!clayer.visible); 
+              this.checked = clayer.visible; 
+            } 
+          }); 
+ 
+          //add the check box and label to the toc 
+          dojo.place(checkBox.domNode,dojo.byId("toggle"),"after"); 
+          var checkLabel = dojo.create('label',{'for':checkBox.name, innerHTML:layerName},checkBox.domNode,"after"); 
+           dojo.place("<br />",checkLabel,"after"); 
+        }); 
+ 
+       
+		
+        
+        dojo.connect(map, 'onLoad', function(theMap) { 
+          //resize the map when the browser resizes 
+          dojo.connect(dijit.byId('map'), 'resize', map,map.resize); 
+        }); 
+       
+		
+		} 
+ 
+  
+      function doFind() { 
+        //Set the search text to the value in the box 
+        findParams.searchText = dojo.byId("ownerName").value; 
+        findTask.execute(findParams,showResults); 
+      } 
+	  
+	   
+ 
+      function showResults(results) { 
+        //This function works with an array of FindResult that the task returns 
+        map.graphics.clear(); 
+        var symbol = new esri.symbol.SimpleFillSymbol("none", new esri.symbol.SimpleLineSymbol("solid", new dojo.Color([255,0,0]), 2), new dojo.Color([255,255,0,0.25]));
+ 
+        //create array of attributes 
+        var items = dojo.map(results,function(result){ 
+          var graphic = result.feature; 
+          graphic.setSymbol(symbol); 
+          map.graphics.add(graphic); 
+          return result.feature.attributes; 
+        }); 
+	
+   
+         
+        //Create data object to be used in store 
+        //var data = { 
+          //identifier: "ProjRteID",  //This field needs to have unique values 
+          //label: "ProjRteID", //Name field for display. Not pertinent to a grid but may be used elsewhere. 
+         // items: items 
+        //}; 
+ 
+         //Create data store and bind to grid. 
+        //store = new dojo.data.ItemFileReadStore({ data:data }); 
+       // var grid = dijit.byId('grid'); 
+       // grid.setStore(store); 
+ 
+        //Zoom back to the initial map extent 
+	var selectedTaxLot1; 
+	var taxLotExtent1;
+ 
+        dojo.forEach(map.graphics.graphics,function(graphic){ 
+          selectedTaxLot1 = graphic; 
+          return; 
+      
+        }); 
+	var taxLotExtent1 = selectedTaxLot1.geometry.getExtent();
+	taxLotExtent1 = taxLotExtent1.expand(1.3);
+        map.setExtent(taxLotExtent1); 
+ 
+      } 
+ 
+      //Zoom to the parcel when the user clicks a row 
+      //function onRowClickHandler(evt){ 
+       // var clickedTaxLotId = grid.getItem(evt.rowIndex).ProjRteID; 
+       // var selectedTaxLot; 
+ 
+       // dojo.forEach(map.graphics.graphics,function(graphic){ 
+          //if((graphic.attributes) && graphic.attributes.ProjRteID === clickedTaxLotId){ 
+           // selectedTaxLot = graphic; 
+           // return; 
+          //} 
+        //}); 
+       // var taxLotExtent = selectedTaxLot.geometry.getExtent(); 
+       // map.setExtent(taxLotExtent); 
+      //} 
+		
+	
+ 
+  function showLoading() { 
+          esri.show(loading); 
+          map.disableMapNavigation(); 
+          map.hideZoomSlider(); 
+        } 
+ 
+        function hideLoading(error) { 
+          esri.hide(loading); 
+          map.enableMapNavigation(); 
+          map.showZoomSlider(); 
+         
+        } 
+      dojo.addOnLoad(init); 
+	 
+		
+    </script>  
+  </head> 
+
+   
+  <body class="claro" > 
+    <div id="mainWindow" dojotype="dijit.layout.BorderContainer" design="headline" 
+    gutters="false" style="width:100%; height:100%;"> 
+	
+      <div id="header" style="background-color: steelblue" dojotype="dijit.layout.ContentPane"  region="top"> 
+	  <div id = "Title" style="background-color: white"  dojotype="dijit.layout.ContentPane" region="top"> 
+	  <div id="subheader" style="font-size:30px" >PSRC Prioritization Webmap</div> 
+	  </div> 
+	  <br>
+       
+	  
+       
+      </div> 
+      <div dojotype="dijit.layout.ContentPane" id="leftPane" region="left" style="background-color: steelblue" > 
+         
+        <div dojoType="dijit.layout.AccordionContainer"> 
+          <div dojoType="dijit.layout.ContentPane" id="legendPane" title="Legend" >  
+            <div id="legendDiv"></div> 
+          </div> 
+          <div dojoType="dijit.layout.ContentPane" title="Prioritization Data Layers" selected="true"> 
+            <span style="padding:10px 0;">Click to toggle the visibilty of Data Layers</span> 
+            <div id="toggle" style="padding: 2px 2px;" ></div> 
+          </div> 
+        </div> 
+      
+      </div> 
+      <div id="map"   dojotype="dijit.layout.ContentPane" region="center"> 
+	  MTPID: <input type="text" id="ownerName" size="60" value="" /> 
+      <button data-dojo-type="dijit.form.Button"  data-dojo-props='onClick:function(){ doFind();}, value:"Search"'> 
+        Search 
+      </button> 
+	  <img id="loadingImg" src="Images/ajax-loader2.gif" style="position:absolute; right:512px; top:256px; z-index:100;" /> 
+      </div> 
+      <div id="footer" dojotype="dijit.layout.ContentPane" region="bottom" style="background-color: steelblue; height:5px" > 
+        
+      </div> 
+	  <div dojotype="dijit.layout.ContentPane" id="rightPane" region="right"  style="background-color: steelblue; width:5px" > 
+	   </div> 
+    </div> 
+  </body> 
+
+  
+</html> 
